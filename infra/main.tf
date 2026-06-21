@@ -168,11 +168,6 @@ data "tls_certificate" "github" {
 }
 
 # Create GitHub OIDC Provider in AWS
-resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.github.certificates[0].sha1_fingerprint]
-}
 
 # Create IAM Role for GitHub Actions (Trusts OIDC Provider)
 resource "aws_iam_role" "github_actions" {
@@ -201,6 +196,50 @@ resource "aws_iam_role" "github_actions" {
 }
 
 # IAM Policy for GitHub Actions
+resource "aws_iam_policy" "github_actions_policy" {
+  name        = "${var.project_name}-github-actions-policy"
+  description = "Policy for GitHub Actions to push to ECR and deploy via SSM"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # ECR Login Token
+      {
+        Effect   = "Allow"
+        Action   = "ecr:GetAuthorizationToken"
+        Resource = "*"
+      },
+      # ECR Image Upload
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:PutImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload"
+        ]
+        Resource = [
+          aws_ecr_repository.backend.arn,
+          aws_ecr_repository.frontend.arn
+        ]
+      },
+      # SSM Run Command (Trigger command execution on EC2)
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:SendCommand"
+        ]
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}:*:document/AWS-RunShellScript",
+          "arn:aws:ec2:${var.aws_region}:*:instance/*"
+        ]
+      }
+    ]
+  })
+}
 
 # Attach Policy to GitHub Actions IAM Role
 resource "aws_iam_role_policy_attachment" "github_actions_attach" {
