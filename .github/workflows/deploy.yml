@@ -51,8 +51,10 @@ jobs:
       # Initialize Terraform with Dynamic S3 Backend Configuration
       - name: Terraform Init
         run: |
-          terraform apply -auto-approve \
-          -var="key_name=${{ secrets.EC2_KEY_NAME }}"
+          terraform init -reconfigure \
+          -backend-config="bucket=${{ steps.bootstrap-s3.outputs.bucket_name }}" \
+          -backend-config="key=state/terraform.tfstate" \
+          -backend-config="region=ap-south-1"
         working-directory: ./infra
 
       # Deploy Infrastructure (ECR, VPC, EC2, IAM)
