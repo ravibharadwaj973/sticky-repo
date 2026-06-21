@@ -1,0 +1,105 @@
+name: Build, Push and Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+
+# Required for AWS OIDC authentication
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Log in to AWS using the existing OIDC Role
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::051987441928:role/containied
+          aws-region: us-east-1
+
+      # Setup Terraform CLI
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false # Disable wrapper to get clean raw output
+
+      # Initialize Terraform
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./infra
+
+      # Deploy Infrastructure (ECR, VPC, EC2, IAM)
+      - name: Terraform Apply
+        run: |
+          terraform apply -auto-approve -var="github_repo=${{ github.repository }}"
+        working-directory: ./infra
+
+      # Retrieve ECR Registry and Repository URLs from Terraform Outputs
+      - name: Get Terraform Outputs
+        id: tf-outputs
+        run: |
+          ECR_BACKEND_URL=$(terraform output -raw ecr_backend_url)
+          ECR_FRONTEND_URL=$(terraform output -raw ecr_frontend_url)
+          # Extract ECR Registry (e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com) from ECR URL
+          ECR_REGISTRY=$(echo "$ECR_BACKEND_URL" | cut -d'/' -f1)
+          
+          echo "ecr_backend_url=$ECR_BACKEND_URL" >> $GITHUB_OUTPUT
+          echo "ecr_frontend_url=$ECR_FRONTEND_URL" >> $GITHUB_OUTPUT
+          echo "ecr_registry=$ECR_REGISTRY" >> $GITHUB_OUTPUT
+        working-directory: ./infra
+
+      # Log in to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Build and Push Backend Image
+      - name: Build, tag, and push Backend Image
+        env:
+          ECR_REGISTRY: ${{ steps.tf-outputs.outputs.ecr_registry }}
+          ECR_REPOSITORY: stickynoted-backend
+          IMAGE_TAG: latest
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      # Build and Push Frontend Image
+      - name: Build, tag, and push Frontend Image
+        env:
+          ECR_REGISTRY: ${{ steps.tf-outputs.outputs.ecr_registry }}
+          ECR_REPOSITORY: stickynoted-frontend
+          IMAGE_TAG: latest
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./frontends
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      # Trigger Deploy via AWS Systems Manager (SSM) Run Command
+      - name: Deploy to EC2 via AWS SSM
+        env:
+          ECR_REGISTRY: ${{ steps.tf-outputs.outputs.ecr_registry }}
+        run: |
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=tag:Name,Values=stickynoted-app-server" \
+            --comment "Deploying backend and frontend Docker containers" \
+            --parameters "commands=[
+              \"aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REGISTRY\",
+              \"docker stop backend-container || true\",
+              \"docker rm backend-container || true\",
+              \"docker stop frontend-container || true\",
+              \"docker rm frontend-container || true\",
+              \"docker image prune -a -f || true\",
+              \"docker pull $ECR_REGISTRY/stickynoted-backend:latest\",
+              \"docker pull $ECR_REGISTRY/stickynoted-frontend:latest\",
+              \"docker run -d --name backend-container -p 5000:5000 $ECR_REGISTRY/stickynoted-backend:latest\",
+              \"docker run -d --name frontend-container -p 3000:3000 $ECR_REGISTRY/stickynoted-frontend:latest\"
+            ]" \
+            --region us-east-1
