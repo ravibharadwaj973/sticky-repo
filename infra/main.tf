@@ -73,6 +73,12 @@ resource "aws_security_group" "ec2_sg" {
   description = "Allow inbound traffic for web servers"
   vpc_id      = aws_vpc.main.id
 
+ingress {
+  from_port   = 22
+  to_port     = 22
+  protocol    = "tcp"
+  cidr_blocks = ["0.0.0.0/0"]
+}
   # Next.js Frontend
   ingress {
     from_port   = 3000
@@ -139,9 +145,9 @@ resource "aws_instance" "app_server" {
   ami                  = data.aws_ami.ubuntu.id
   instance_type        = var.instance_type
   subnet_id            = aws_subnet.public.id
-  security_groups      = [aws_security_group.ec2_sg.id]
+  vpc_security_group_ids = [aws_security_group.ec2_sg.id]
   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
-
+ key_name = var.key_name
   # Startup script to install Docker
   user_data = <<-EOF
               #!/bin/bash
@@ -159,16 +165,3 @@ resource "aws_instance" "app_server" {
 
   tags = { Name = "${var.project_name}-app-server" }
 }
-
-# --- GitHub Actions OIDC Configuration ---
-
-# Fetch GitHub OIDC Certificate details
-
-# Create GitHub OIDC Provider in AWS
-
-# Create IAM Role for GitHub Actions (Trusts OIDC Provider)
-
-# IAM Policy for GitHub Actions
-
-
-# Attach Policy to GitHub Actions IAM Role
