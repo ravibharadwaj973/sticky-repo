@@ -41,7 +41,9 @@ jobs:
           # Create the S3 bucket if it doesn't already exist
           if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
             echo "Bucket $BUCKET_NAME does not exist. Creating..."
-            aws s3api create-bucket --bucket "$BUCKET_NAME" --region ap-south-1
+            aws s3api create-bucket \
+              --bucket "$BUCKET_NAME" \
+              --create-bucket-configuration LocationConstraint=ap-south-1
           else
             echo "Bucket $BUCKET_NAME already exists."
           fi
