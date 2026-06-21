@@ -22,7 +22,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::051987441928:role/containied
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: us-east-1
 
       # Setup Terraform CLI
@@ -31,9 +31,30 @@ jobs:
         with:
           terraform_wrapper: false # Disable wrapper to get clean raw output
 
-      # Initialize Terraform
+      # Bootstrap S3 State Bucket (Guarantees a globally unique bucket name per account)
+      - name: Bootstrap S3 State Bucket
+        id: bootstrap-s3
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET_NAME="stickynoted-tfstate-$AWS_ACCOUNT_ID"
+          
+          # Create the S3 bucket if it doesn't already exist
+          if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+            echo "Bucket $BUCKET_NAME does not exist. Creating..."
+            aws s3api create-bucket --bucket "$BUCKET_NAME" --region us-east-1
+          else
+            echo "Bucket $BUCKET_NAME already exists."
+          fi
+          
+          echo "bucket_name=$BUCKET_NAME" >> $GITHUB_OUTPUT
+
+      # Initialize Terraform with Dynamic S3 Backend Configuration
       - name: Terraform Init
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ steps.bootstrap-s3.outputs.bucket_name }}" \
+            -backend-config="key=state/terraform.tfstate" \
+            -backend-config="region=us-east-1"
         working-directory: ./infra
 
       # Deploy Infrastructure (ECR, VPC, EC2, IAM)
