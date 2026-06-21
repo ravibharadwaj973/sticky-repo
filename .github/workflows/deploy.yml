@@ -23,7 +23,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::051987441928:role/containied
-          aws-region: us-east-1
+          aws-region: ap-south-1
 
       # Setup Terraform CLI
       - name: Setup Terraform
@@ -41,7 +41,7 @@ jobs:
           # Create the S3 bucket if it doesn't already exist
           if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
             echo "Bucket $BUCKET_NAME does not exist. Creating..."
-            aws s3api create-bucket --bucket "$BUCKET_NAME" --region us-east-1
+            aws s3api create-bucket --bucket "$BUCKET_NAME" --region ap-south-1
           else
             echo "Bucket $BUCKET_NAME already exists."
           fi
@@ -51,10 +51,8 @@ jobs:
       # Initialize Terraform with Dynamic S3 Backend Configuration
       - name: Terraform Init
         run: |
-          terraform init \
-            -backend-config="bucket=${{ steps.bootstrap-s3.outputs.bucket_name }}" \
-            -backend-config="key=state/terraform.tfstate" \
-            -backend-config="region=us-east-1"
+          terraform apply -auto-approve \
+          -var="key_name=${{ secrets.EC2_KEY_NAME }}"
         working-directory: ./infra
 
       # Deploy Infrastructure (ECR, VPC, EC2, IAM)
@@ -69,7 +67,7 @@ jobs:
         run: |
           ECR_BACKEND_URL=$(terraform output -raw ecr_backend_url)
           ECR_FRONTEND_URL=$(terraform output -raw ecr_frontend_url)
-          # Extract ECR Registry (e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com) from ECR URL
+          # Extract ECR Registry (e.g., 123456789012.dkr.ecr.ap-south-1.amazonaws.com) from ECR URL
           ECR_REGISTRY=$(echo "$ECR_BACKEND_URL" | cut -d'/' -f1)
           
           echo "ecr_backend_url=$ECR_BACKEND_URL" >> $GITHUB_OUTPUT
@@ -112,7 +110,7 @@ jobs:
             --targets "Key=tag:Name,Values=stickynoted-app-server" \
             --comment "Deploying backend and frontend Docker containers" \
             --parameters "commands=[
-              \"aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REGISTRY\",
+              \"aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $ECR_REGISTRY\",
               \"docker stop backend-container || true\",
               \"docker rm backend-container || true\",
               \"docker stop frontend-container || true\",
@@ -123,4 +121,4 @@ jobs:
               \"docker run -d --name backend-container -p 5000:5000 $ECR_REGISTRY/stickynoted-backend:latest\",
               \"docker run -d --name frontend-container -p 3000:3000 $ECR_REGISTRY/stickynoted-frontend:latest\"
             ]" \
-            --region us-east-1
+            --region ap-south-1
