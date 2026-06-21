@@ -163,86 +163,12 @@ resource "aws_instance" "app_server" {
 # --- GitHub Actions OIDC Configuration ---
 
 # Fetch GitHub OIDC Certificate details
-data "tls_certificate" "github" {
-  url = "https://token.actions.githubusercontent.com/.well-known/openid-configuration"
-}
 
 # Create GitHub OIDC Provider in AWS
 
 # Create IAM Role for GitHub Actions (Trusts OIDC Provider)
-resource "aws_iam_role" "github_actions" {
-  name = "${var.project_name}-github-actions-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Federated = aws_iam_openid_connect_provider.github.arn
-        }
-        Action = "sts:AssumeRoleWithWebIdentity"
-        Condition = {
-          StringEquals = {
-            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          }
-          StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
-          }
-        }
-      }
-    ]
-  })
-}
 
 # IAM Policy for GitHub Actions
-resource "aws_iam_policy" "github_actions_policy" {
-  name        = "${var.project_name}-github-actions-policy"
-  description = "Policy for GitHub Actions to push to ECR and deploy via SSM"
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # ECR Login Token
-      {
-        Effect   = "Allow"
-        Action   = "ecr:GetAuthorizationToken"
-        Resource = "*"
-      },
-      # ECR Image Upload
-      {
-        Effect = "Allow"
-        Action = [
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage",
-          "ecr:PutImage",
-          "ecr:InitiateLayerUpload",
-          "ecr:UploadLayerPart",
-          "ecr:CompleteLayerUpload"
-        ]
-        Resource = [
-          aws_ecr_repository.backend.arn,
-          aws_ecr_repository.frontend.arn
-        ]
-      },
-      # SSM Run Command (Trigger command execution on EC2)
-      {
-        Effect = "Allow"
-        Action = [
-          "ssm:SendCommand"
-        ]
-        Resource = [
-          "arn:aws:ssm:${var.aws_region}:*:document/AWS-RunShellScript",
-          "arn:aws:ec2:${var.aws_region}:*:instance/*"
-        ]
-      }
-    ]
-  })
-}
 
 # Attach Policy to GitHub Actions IAM Role
-resource "aws_iam_role_policy_attachment" "github_actions_attach" {
-  role       = aws_iam_role.github_actions.name
-  policy_arn = aws_iam_policy.github_actions_policy.arn
-}
