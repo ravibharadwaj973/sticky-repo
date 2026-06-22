@@ -59,6 +59,11 @@ jobs:
           -backend-config="region=ap-south-1"
         working-directory: ./infra
 
+      - name: Import Existing IAM Role
+        run: |
+          terraform import aws_iam_role.ec2_role stickynoted-ec2-role || echo "Already imported or failed, moving on..."
+        working-directory: ./infra  
+        
       # Deploy Infrastructure (ECR, VPC, EC2, IAM)
       - name: Terraform Apply
         run: |
