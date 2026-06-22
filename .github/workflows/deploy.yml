@@ -49,6 +49,27 @@ jobs:
           fi
           
           echo "bucket_name=$BUCKET_NAME" >> $GITHUB_OUTPUT
+      
+      - name: Force Clean Conflicting IAM Resources
+        run: |
+          echo "Checking for old instance profile..."
+          if aws iam get-instance-profile --instance-profile-name stickynoted-ec2-instance-profile 2>/dev/null; then
+            echo "Removing role from instance profile..."
+            aws iam remove-role-from-instance-profile --instance-profile-name stickynoted-ec2-instance-profile --role-name stickynoted-ec2-role || true
+            echo "Deleting instance profile..."
+            aws iam delete-instance-profile --instance-profile-name stickynoted-ec2-instance-profile || true
+          fi
+
+          echo "Checking for old IAM role..."
+          if aws iam get-role --role-name stickynoted-ec2-role 2>/dev/null; then
+            echo "Detaching policies..."
+            aws iam detach-role-policy --role-name stickynoted-ec2-role --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly || true
+            aws iam detach-role-policy --role-name stickynoted-ec2-role --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore || true
+            echo "Deleting role..."
+            aws iam delete-role --role-name stickynoted-ec2-role || true
+          fi
+
+      # Initi    
 
       # Initialize Terraform with Dynamic S3 Backend Configuration
       - name: Terraform Init
@@ -57,13 +78,8 @@ jobs:
           -backend-config="bucket=${{ steps.bootstrap-s3.outputs.bucket_name }}" \
           -backend-config="key=state/terraform.tfstate" \
           -backend-config="region=ap-south-1"
-        working-directory: ./infra
+        working-directory: ./infra 
 
-      - name: Import Existing IAM Role
-        run: |
-          terraform import aws_iam_role.ec2_role stickynoted-ec2-role || echo "Already imported or failed, moving on..."
-        working-directory: ./infra  
-        
       # Deploy Infrastructure (ECR, VPC, EC2, IAM)
       - name: Terraform Apply
         run: |
