@@ -109,7 +109,7 @@ jobs:
       # Build and Push Backend Image
       - name: Build, tag, and push Backend Image
         env:
-          ECR_REGISTRY: ${{ steps.tf-outputs.outputs.ecr_registry }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: stickynoted-backend
           IMAGE_TAG: latest
         run: |
@@ -119,7 +119,7 @@ jobs:
       # Build and Push Frontend Image
       - name: Build, tag, and push Frontend Image
         env:
-          ECR_REGISTRY: ${{ steps.tf-outputs.outputs.ecr_registry }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: stickynoted-frontend
           IMAGE_TAG: latest
         run: |
