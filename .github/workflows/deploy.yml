@@ -62,7 +62,8 @@ jobs:
       # Deploy Infrastructure (ECR, VPC, EC2, IAM)
       - name: Terraform Apply
         run: |
-          terraform apply -auto-approve -var="github_repo=${{ github.repository }}"
+          terraform apply -auto-approve \
+           -var="key_name=${{ secrets.EC2_KEY_NAME }}"
         working-directory: ./infra
 
       # Retrieve ECR Registry and Repository URLs from Terraform Outputs
