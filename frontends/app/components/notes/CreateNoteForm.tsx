@@ -29,7 +29,7 @@ export default function CreateNoteForm({ onNoteCreated }: CreateNoteFormProps) {
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+    <div className="bg-white p-6 rounded-lg shadow-md mb-6 text-black">
       <h2 className="text-xl font-semibold mb-4">Create New Note</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <input

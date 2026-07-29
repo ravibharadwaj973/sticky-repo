@@ -20,7 +20,7 @@ jobs:
 
       # Log in to AWS using the existing OIDC Role
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v4 
         with:
           role-to-assume: arn:aws:iam::051987441928:role/containied
           aws-region: ap-south-1

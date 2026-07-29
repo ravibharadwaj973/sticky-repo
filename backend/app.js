@@ -15,8 +15,8 @@ app.use(express.json());
 app.use(cookieParser());
 const allowedOrigins = [
   'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:3002',
+  'http://13.201.30.11',        // Add your EC2 Public IP
+  'http://127.0.0.1',            // Add local host loopback
   process.env.CLIENT_URL
 ].filter(Boolean);
 

@@ -31,7 +31,7 @@ export default function NotesPage() {
 
         {refreshTrigger === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">
+            <p className="text-gray-500 text-l g">
               No notes yet. Create your first note above!
             </p>
           </div>
